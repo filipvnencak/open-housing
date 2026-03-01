@@ -1,14 +1,29 @@
 import { createHash } from "crypto";
-import type { VoteWithShare, VotingResults } from "@/types";
+import type { VoteWithShare, VotingMethod, VotingResults } from "@/types";
 
-export function calculateResults(votes: VoteWithShare[]): VotingResults {
+function getWeight(vote: VoteWithShare, method: VotingMethod): number {
+  switch (method) {
+    case "per_flat":
+      return 1;
+    case "per_area":
+      return vote.area ?? 1;
+    case "per_share":
+    default:
+      return vote.shareNumerator / vote.shareDenominator;
+  }
+}
+
+export function calculateResults(
+  votes: VoteWithShare[],
+  method: VotingMethod = "per_share"
+): VotingResults {
   let zaWeight = 0;
   let protiWeight = 0;
   let zdrzalSaWeight = 0;
   let totalWeight = 0;
 
   for (const vote of votes) {
-    const weight = vote.shareNumerator / vote.shareDenominator;
+    const weight = getWeight(vote, method);
     totalWeight += weight;
     if (vote.choice === "za") zaWeight += weight;
     if (vote.choice === "proti") protiWeight += weight;

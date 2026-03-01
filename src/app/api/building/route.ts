@@ -1,7 +1,10 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/db";
 import { building } from "@/db/schema";
+import { eq } from "drizzle-orm";
+import { hasPermission } from "@/lib/permissions";
+import type { UserRole } from "@/types";
 
 export async function GET() {
   const session = await auth();
@@ -16,4 +19,37 @@ export async function GET() {
   }
 
   return NextResponse.json(result);
+}
+
+export async function PATCH(request: NextRequest) {
+  const session = await auth();
+  if (!session) {
+    return NextResponse.json({ error: "Neautorizovaný prístup" }, { status: 401 });
+  }
+
+  if (!hasPermission(session.user.role as UserRole, "manageSettings")) {
+    return NextResponse.json({ error: "Nemáte oprávnenie" }, { status: 403 });
+  }
+
+  const body = await request.json();
+  const { name, address, ico, votingMethod } = body;
+
+  const [existing] = await db.select().from(building).limit(1);
+  if (!existing) {
+    return NextResponse.json({ error: "Budova nenájdená" }, { status: 404 });
+  }
+
+  const updateData: Record<string, unknown> = {};
+  if (name !== undefined) updateData.name = name;
+  if (address !== undefined) updateData.address = address;
+  if (ico !== undefined) updateData.ico = ico;
+  if (votingMethod !== undefined) updateData.votingMethod = votingMethod;
+
+  const [updated] = await db
+    .update(building)
+    .set(updateData)
+    .where(eq(building.id, existing.id))
+    .returning();
+
+  return NextResponse.json(updated);
 }

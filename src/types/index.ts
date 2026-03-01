@@ -29,6 +29,7 @@ export type VoteType = "electronic" | "paper";
 export type VotingStatus = "draft" | "active" | "closed";
 export type PostCategory = "info" | "urgent" | "event" | "maintenance";
 export type InvitationStatus = "pending" | "used" | "expired";
+export type VotingMethod = "per_share" | "per_flat" | "per_area";
 
 export type SafeUser = Omit<User, "passwordHash">;
 
@@ -36,6 +37,7 @@ export interface VoteWithShare {
   choice: VoteChoice;
   shareNumerator: number;
   shareDenominator: number;
+  area: number | null;
 }
 
 export interface VotingResults {

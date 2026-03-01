@@ -2,22 +2,19 @@
 
 import { useSession } from "next-auth/react";
 import { useTranslations } from "next-intl";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { hasPermission } from "@/lib/permissions";
 import type { UserRole } from "@/types";
-
-interface BuildingInfo {
-  id: string;
-  name: string;
-  address: string;
-  ico: string | null;
-}
+import SettingsTabs, { type SettingsTab } from "@/components/settings/SettingsTabs";
+import BuildingInfoTab from "@/components/settings/BuildingInfoTab";
+import EntrancesTab from "@/components/settings/EntrancesTab";
+import FlatsTab from "@/components/settings/FlatsTab";
+import VotingSettingsTab from "@/components/settings/VotingSettingsTab";
 
 export default function SettingsPage() {
   const { data: session } = useSession();
   const t = useTranslations("Settings");
-  const [buildingInfo, setBuildingInfo] = useState<BuildingInfo | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState<SettingsTab>("building");
 
   const role = (session?.user?.role || "owner") as UserRole;
 
@@ -29,60 +26,18 @@ export default function SettingsPage() {
     );
   }
 
-  // eslint-disable-next-line react-hooks/rules-of-hooks
-  useEffect(() => {
-    fetch("/api/building")
-      .then((r) => (r.ok ? r.json() : null))
-      .then((data) => {
-        setBuildingInfo(data);
-        setLoading(false);
-      })
-      .catch(() => setLoading(false));
-  }, []);
-
-  if (loading) {
-    return (
-      <div className="animate-pulse space-y-4">
-        <div className="h-8 bg-gray-200 rounded w-1/3" />
-        <div className="h-32 bg-gray-200 rounded" />
-      </div>
-    );
-  }
+  const canEdit = hasPermission(role, "manageSettings");
 
   return (
-    <div className="max-w-2xl">
+    <div className="max-w-4xl">
       <h1 className="text-2xl font-bold text-gray-900 mb-6">{t("title")}</h1>
 
-      <div className="bg-white rounded-xl border border-gray-200 p-6">
-        <h2 className="text-lg font-bold text-gray-900 mb-4">
-          {t("buildingInfo")}
-        </h2>
+      <SettingsTabs activeTab={activeTab} onTabChange={setActiveTab} />
 
-        {buildingInfo ? (
-          <dl className="space-y-3">
-            <div>
-              <dt className="text-sm text-gray-500">{t("name")}</dt>
-              <dd className="text-base text-gray-900">{buildingInfo.name}</dd>
-            </div>
-            <div>
-              <dt className="text-sm text-gray-500">{t("address")}</dt>
-              <dd className="text-base text-gray-900">
-                {buildingInfo.address}
-              </dd>
-            </div>
-            {buildingInfo.ico && (
-              <div>
-                <dt className="text-sm text-gray-500">{t("ico")}</dt>
-                <dd className="text-base text-gray-900">{buildingInfo.ico}</dd>
-              </div>
-            )}
-          </dl>
-        ) : (
-          <p className="text-base text-gray-500">
-            {t("noInfo")}
-          </p>
-        )}
-      </div>
+      {activeTab === "building" && <BuildingInfoTab canEdit={canEdit} />}
+      {activeTab === "entrances" && <EntrancesTab canEdit={canEdit} />}
+      {activeTab === "flats" && <FlatsTab canEdit={canEdit} />}
+      {activeTab === "voting" && <VotingSettingsTab canEdit={canEdit} />}
     </div>
   );
 }

@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/db";
-import { votes, votings, users, flats } from "@/db/schema";
+import { votes, votings, users, flats, building } from "@/db/schema";
 import { and, eq } from "drizzle-orm";
 import { hasPermission } from "@/lib/permissions";
 import { generateAuditHash, calculateResults } from "@/lib/voting";
-import type { UserRole, VoteChoice, VoteWithShare } from "@/types";
+import type { UserRole, VoteChoice, VotingMethod, VoteWithShare } from "@/types";
 
 export async function GET(request: NextRequest) {
   const session = await auth();
@@ -24,6 +24,10 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Nemáte oprávnenie" }, { status: 403 });
   }
 
+  // Fetch building voting method
+  const [bld] = await db.select().from(building).limit(1);
+  const votingMethod = (bld?.votingMethod ?? "per_share") as VotingMethod;
+
   // Get votes with flat share info
   const voteRows = await db
     .select({
@@ -36,6 +40,7 @@ export async function GET(request: NextRequest) {
       ownerName: users.name,
       shareNumerator: flats.shareNumerator,
       shareDenominator: flats.shareDenominator,
+      area: flats.area,
     })
     .from(votes)
     .leftJoin(users, eq(votes.ownerId, users.id))
@@ -52,9 +57,10 @@ export async function GET(request: NextRequest) {
       choice: v.choice as VoteChoice,
       shareNumerator: v.shareNumerator!,
       shareDenominator: v.shareDenominator!,
+      area: v.area,
     }));
 
-  const results = calculateResults(votesWithShare);
+  const results = calculateResults(votesWithShare, votingMethod);
 
   return NextResponse.json({
     votes: voteRows,

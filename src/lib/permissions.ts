@@ -11,6 +11,7 @@ const permissions = {
   grantMandate: ["admin", "owner"],
   manageUsers: ["admin"],
   viewSettings: ["admin", "caretaker"],
+  manageSettings: ["admin"],
 } as const;
 
 export type Permission = keyof typeof permissions;

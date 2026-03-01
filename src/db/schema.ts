@@ -42,6 +42,12 @@ export const postCategoryEnum = pgEnum("post_category", [
   "maintenance",
 ]);
 
+export const votingMethodEnum = pgEnum("voting_method", [
+  "per_share",
+  "per_flat",
+  "per_area",
+]);
+
 // ── Tables ─────────────────────────────────────────────
 
 export const building = pgTable("building", {
@@ -49,6 +55,7 @@ export const building = pgTable("building", {
   name: varchar("name", { length: 255 }).notNull(),
   address: varchar("address", { length: 500 }).notNull(),
   ico: varchar("ico", { length: 20 }),
+  votingMethod: votingMethodEnum("voting_method").notNull().default("per_share"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
@@ -71,6 +78,7 @@ export const flats = pgTable("flats", {
   floor: integer("floor").notNull().default(0),
   shareNumerator: integer("share_numerator").notNull(),
   shareDenominator: integer("share_denominator").notNull(),
+  area: integer("area"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 

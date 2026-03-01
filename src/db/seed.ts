@@ -63,17 +63,17 @@ async function seed() {
 
   // Flats - 4 per entrance
   const flatDataA = [
-    { flatNumber: "1", floor: 1, shareNumerator: 65, shareDenominator: 10000 },
-    { flatNumber: "2", floor: 1, shareNumerator: 75, shareDenominator: 10000 },
-    { flatNumber: "3", floor: 2, shareNumerator: 65, shareDenominator: 10000 },
-    { flatNumber: "4", floor: 2, shareNumerator: 80, shareDenominator: 10000 },
+    { flatNumber: "1", floor: 1, shareNumerator: 65, shareDenominator: 10000, area: 52 },
+    { flatNumber: "2", floor: 1, shareNumerator: 75, shareDenominator: 10000, area: 68 },
+    { flatNumber: "3", floor: 2, shareNumerator: 65, shareDenominator: 10000, area: 52 },
+    { flatNumber: "4", floor: 2, shareNumerator: 80, shareDenominator: 10000, area: 74 },
   ];
 
   const flatDataB = [
-    { flatNumber: "5", floor: 1, shareNumerator: 70, shareDenominator: 10000 },
-    { flatNumber: "6", floor: 1, shareNumerator: 75, shareDenominator: 10000 },
-    { flatNumber: "7", floor: 2, shareNumerator: 70, shareDenominator: 10000 },
-    { flatNumber: "8", floor: 2, shareNumerator: 85, shareDenominator: 10000 },
+    { flatNumber: "5", floor: 1, shareNumerator: 70, shareDenominator: 10000, area: 58 },
+    { flatNumber: "6", floor: 1, shareNumerator: 75, shareDenominator: 10000, area: 68 },
+    { flatNumber: "7", floor: 2, shareNumerator: 70, shareDenominator: 10000, area: 58 },
+    { flatNumber: "8", floor: 2, shareNumerator: 85, shareDenominator: 10000, area: 82 },
   ];
 
   const createdFlatsA = await db
