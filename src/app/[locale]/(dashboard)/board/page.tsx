@@ -55,6 +55,7 @@ export default function NastenkaPage() {
     }
   }
 
+
   async function handleTogglePin(post: PostData) {
     const res = await fetch(`/api/posts/${post.id}`, {
       method: "PATCH",
