@@ -39,8 +39,7 @@ next-env.d.ts
 # uploads
 /uploads
 
-# drizzle
-/drizzle/meta
+# drizzle - migrations must be committed for production deploys
 
 # backups
 /backups
