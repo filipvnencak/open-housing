@@ -14,6 +14,8 @@ export default function NovaHlasovaniePage() {
   const tCommon = useTranslations("Common");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [votingType, setVotingType] = useState("written");
+  const [initiatedBy, setInitiatedBy] = useState("board");
 
   const role = (session?.user?.role || "owner") as UserRole;
 
@@ -24,6 +26,9 @@ export default function NovaHlasovaniePage() {
       </div>
     );
   }
+
+  const showRestrictionNote =
+    votingType === "meeting" || initiatedBy === "owners_quarter";
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -41,6 +46,9 @@ export default function NovaHlasovaniePage() {
         startsAt: formData.get("startsAt"),
         endsAt: formData.get("endsAt"),
         status: formData.get("status"),
+        votingType: formData.get("votingType"),
+        initiatedBy: formData.get("initiatedBy"),
+        quorumType: formData.get("quorumType"),
       }),
     });
 
@@ -123,6 +131,62 @@ export default function NovaHlasovaniePage() {
                 className="w-full px-4 py-3 text-base border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
               />
             </div>
+          </div>
+
+          {/* Voting Type */}
+          <div>
+            <label className="block text-base font-medium text-gray-700 mb-1">
+              {t("votingTypeLabel")}
+            </label>
+            <select
+              name="votingType"
+              value={votingType}
+              onChange={(e) => setVotingType(e.target.value)}
+              className="w-full px-4 py-3 text-base border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+            >
+              <option value="written">{t("votingTypeWritten")}</option>
+              <option value="meeting">{t("votingTypeMeeting")}</option>
+            </select>
+          </div>
+
+          {/* Initiated By */}
+          <div>
+            <label className="block text-base font-medium text-gray-700 mb-1">
+              {t("initiatedByLabel")}
+            </label>
+            <select
+              name="initiatedBy"
+              value={initiatedBy}
+              onChange={(e) => setInitiatedBy(e.target.value)}
+              className="w-full px-4 py-3 text-base border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+            >
+              <option value="board">{t("initiatedByBoard")}</option>
+              <option value="owners_quarter">{t("initiatedByOwnersQuarter")}</option>
+            </select>
+          </div>
+
+          {/* Restriction note */}
+          {showRestrictionNote && (
+            <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 text-base text-amber-800">
+              {votingType === "meeting"
+                ? t("meetingNote")
+                : t("ownersQuarterNote")}
+            </div>
+          )}
+
+          {/* Quorum Type */}
+          <div>
+            <label className="block text-base font-medium text-gray-700 mb-1">
+              {t("quorumTypeLabel")}
+            </label>
+            <select
+              name="quorumType"
+              className="w-full px-4 py-3 text-base border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+            >
+              <option value="simple_all">{t("quorumSimpleAll")}</option>
+              <option value="simple_present">{t("quorumSimplePresent")}</option>
+              <option value="two_thirds_all">{t("quorumTwoThirdsAll")}</option>
+            </select>
           </div>
 
           <div>

@@ -14,6 +14,9 @@ import type {
   UserRole,
   VoteChoice,
   VotingStatus,
+  VotingType,
+  VotingInitiatedBy,
+  QuorumType,
   VotingResults as VotingResultsType,
 } from "@/types";
 
@@ -22,16 +25,30 @@ interface VotingDetail {
   title: string;
   description: string | null;
   status: VotingStatus;
+  votingType: VotingType;
+  initiatedBy: VotingInitiatedBy;
+  quorumType: QuorumType;
   startsAt: string;
   endsAt: string;
   voteCounterId: string | null;
   createdBy: { id: string; name: string } | null;
 }
 
+interface UserFlatVote {
+  flatId: string;
+  choice: string;
+}
+
+interface UserFlat {
+  flatId: string;
+  flatNumber: string;
+}
+
 interface VoteData {
   votes: unknown[];
   results: VotingResultsType;
-  userVote: { id: string; choice: VoteChoice } | null;
+  userVotedFlats: UserFlatVote[];
+  userFlats: UserFlat[];
   totalVotes: number;
 }
 
@@ -58,6 +75,7 @@ export default function VotingDetailPage() {
   const [editStartsAt, setEditStartsAt] = useState("");
   const [editEndsAt, setEditEndsAt] = useState("");
   const [editSaving, setEditSaving] = useState(false);
+  const [lastAuditHash, setLastAuditHash] = useState<string | null>(null);
 
   const role = (session?.user?.role || "owner") as UserRole;
   const canVote = hasPermission(role, "vote");
@@ -90,17 +108,21 @@ export default function VotingDetailPage() {
     load();
   }, [id, fetchVoteData]);
 
-  async function handleVote(choice: VoteChoice) {
-    if (!canVote || voteData?.userVote || voting?.status !== "active") return;
+  async function handleVote(choice: VoteChoice, flatId: string) {
+    if (!canVote || voting?.status !== "active") return;
 
     setCastingVote(true);
     const res = await fetch("/api/votes", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ votingId: id, choice }),
+      body: JSON.stringify({ votingId: id, choice, flatId }),
     });
 
     if (res.ok) {
+      const data = await res.json();
+      if (data.auditHash) {
+        setLastAuditHash(data.auditHash);
+      }
       await fetchVoteData();
     }
     setCastingVote(false);
@@ -174,12 +196,36 @@ export default function VotingDetailPage() {
 
   const isActive = voting.status === "active";
   const isClosed = voting.status === "closed";
-  const hasVoted = !!voteData?.userVote;
+  const isMeetingOrOwnersQuarter =
+    voting.votingType === "meeting" || voting.initiatedBy === "owners_quarter";
 
-  const votedChoiceKey =
-    voteData?.userVote?.choice === "za"
+  // Per-flat voting data
+  const userFlats = voteData?.userFlats || [];
+  const userVotedFlats = voteData?.userVotedFlats || [];
+  const hasVotedAllFlats =
+    userFlats.length > 0 &&
+    userFlats.every((f) =>
+      userVotedFlats.some((v) => v.flatId === f.flatId)
+    );
+
+  const getFlatVote = (flatId: string) =>
+    userVotedFlats.find((v) => v.flatId === flatId);
+
+  // Check if a flat was voted by someone else (co-owner)
+  const isFlatVotedByOther = (flatId: string) => {
+    const vote = getFlatVote(flatId);
+    return (
+      !vote &&
+      (voteData?.votes as Array<{ flatId: string }>)?.some(
+        (v) => v.flatId === flatId
+      )
+    );
+  };
+
+  const getChoiceKey = (choice: string) =>
+    choice === "za"
       ? "votedFor"
-      : voteData?.userVote?.choice === "proti"
+      : choice === "proti"
       ? "votedAgainst"
       : "votedAbstain";
 
@@ -197,21 +243,36 @@ export default function VotingDetailPage() {
           <>
             <div className="flex items-start justify-between gap-4 mb-4">
               <h1 className="text-2xl font-bold text-gray-900">{voting.title}</h1>
-              <span
-                className={`px-3 py-1 rounded-full text-sm font-medium whitespace-nowrap ${
-                  isActive
-                    ? "bg-green-100 text-green-700"
+              <div className="flex gap-2 flex-shrink-0">
+                {/* Voting type badge */}
+                <span
+                  className={`px-3 py-1 rounded-full text-sm font-medium whitespace-nowrap ${
+                    voting.votingType === "meeting"
+                      ? "bg-purple-100 text-purple-700"
+                      : "bg-blue-100 text-blue-700"
+                  }`}
+                >
+                  {voting.votingType === "meeting"
+                    ? t("typeMeeting")
+                    : t("typeWritten")}
+                </span>
+                {/* Status badge */}
+                <span
+                  className={`px-3 py-1 rounded-full text-sm font-medium whitespace-nowrap ${
+                    isActive
+                      ? "bg-green-100 text-green-700"
+                      : isClosed
+                      ? "bg-red-100 text-red-700"
+                      : "bg-gray-100 text-gray-700"
+                  }`}
+                >
+                  {isActive
+                    ? t("statusActive")
                     : isClosed
-                    ? "bg-red-100 text-red-700"
-                    : "bg-gray-100 text-gray-700"
-                }`}
-              >
-                {isActive
-                  ? t("statusActive")
-                  : isClosed
-                  ? t("statusClosed")
-                  : t("statusDraft")}
-              </span>
+                    ? t("statusClosed")
+                    : t("statusDraft")}
+                </span>
+              </div>
             </div>
 
             {voting.description && (
@@ -338,33 +399,79 @@ export default function VotingDetailPage() {
         )}
       </div>
 
-      {/* Voting buttons */}
-      {isActive && canVote && !hasVoted && (
-        <div className="space-y-3 mb-6">
-          <h3 className="text-lg font-bold text-gray-900">{t("castVote")}</h3>
-          <VoteButton
-            choice="za"
-            disabled={castingVote}
-            onClick={handleVote}
-          />
-          <VoteButton
-            choice="proti"
-            disabled={castingVote}
-            onClick={handleVote}
-          />
-          <VoteButton
-            choice="zdrzal_sa"
-            disabled={castingVote}
-            onClick={handleVote}
-          />
+      {/* Meeting / owners_quarter info message */}
+      {isActive && isMeetingOrOwnersQuarter && canVote && (
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-6 mb-6 text-center">
+          <p className="text-base text-amber-800">
+            {voting.votingType === "meeting"
+              ? t("meetingOnlyInfo")
+              : t("ownersQuarterInfo")}
+          </p>
         </div>
       )}
 
-      {/* User already voted */}
-      {hasVoted && (
-        <div className="bg-blue-50 border border-blue-200 rounded-xl p-6 mb-6 text-center">
-          <p className="text-lg font-bold text-blue-700">
-            {t(votedChoiceKey)} ✓
+      {/* Per-flat voting sections */}
+      {isActive && canVote && !isMeetingOrOwnersQuarter && userFlats.length > 0 && (
+        <div className="space-y-4 mb-6">
+          {userFlats.map((flat) => {
+            const flatVote = getFlatVote(flat.flatId);
+            const votedByOther = isFlatVotedByOther(flat.flatId);
+
+            return (
+              <div
+                key={flat.flatId}
+                className="bg-white rounded-xl border border-gray-200 p-6"
+              >
+                <h3 className="text-lg font-bold text-gray-900 mb-3">
+                  {t("flatHeader", { number: flat.flatNumber })}
+                </h3>
+
+                {flatVote ? (
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-center">
+                    <p className="text-base font-bold text-blue-700">
+                      {t(getChoiceKey(flatVote.choice))} ✓
+                    </p>
+                  </div>
+                ) : votedByOther ? (
+                  <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 text-center">
+                    <p className="text-base text-amber-700">
+                      {t("flatVotedByOther")}
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    <p className="text-base text-gray-600 mb-2">
+                      {t("castVote", { flatNumber: flat.flatNumber })}
+                    </p>
+                    <VoteButton
+                      choice="za"
+                      disabled={castingVote}
+                      onClick={(choice) => handleVote(choice, flat.flatId)}
+                    />
+                    <VoteButton
+                      choice="proti"
+                      disabled={castingVote}
+                      onClick={(choice) => handleVote(choice, flat.flatId)}
+                    />
+                    <VoteButton
+                      choice="zdrzal_sa"
+                      disabled={castingVote}
+                      onClick={(choice) => handleVote(choice, flat.flatId)}
+                    />
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Audit hash display */}
+      {lastAuditHash && (
+        <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 mb-6">
+          <p className="text-sm text-gray-500 mb-1">{t("auditHashLabel")}</p>
+          <p className="text-xs font-mono text-gray-700 break-all">
+            {lastAuditHash}
           </p>
         </div>
       )}
@@ -380,7 +487,7 @@ export default function VotingDetailPage() {
               {t("recordPaperVote")}
             </button>
           )}
-          {canMandate && !hasVoted && (
+          {canMandate && (
             <button
               onClick={() => setShowMandateModal(true)}
               className="px-5 py-3 bg-purple-600 hover:bg-purple-700 text-white text-base font-medium rounded-lg transition-colors"
@@ -392,7 +499,7 @@ export default function VotingDetailPage() {
       )}
 
       {/* Results */}
-      {voteData && (isClosed || hasVoted || canManage) && (
+      {voteData && (isClosed || hasVotedAllFlats || canManage) && (
         <VotingResults
           results={voteData.results}
           totalVotes={voteData.totalVotes}

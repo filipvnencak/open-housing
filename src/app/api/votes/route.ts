@@ -2,10 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/db";
 import { votes, votings, users, flats, building, userFlats } from "@/db/schema";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { hasPermission } from "@/lib/permissions";
-import { generateAuditHash, calculateResults, aggregateFlatsForVoter } from "@/lib/voting";
-import type { UserRole, VoteChoice, VotingMethod, VoteWithShare } from "@/types";
+import { generateAuditHash, calculateResults } from "@/lib/voting";
+import { sendVoteConfirmation } from "@/lib/email";
+import type { UserRole, VoteChoice, VotingMethod, VoteWithShare, QuorumType } from "@/types";
 
 export async function GET(request: NextRequest) {
   const session = await auth();
@@ -28,7 +29,18 @@ export async function GET(request: NextRequest) {
   const [bld] = await db.select().from(building).limit(1);
   const votingMethod = (bld?.votingMethod ?? "per_share") as VotingMethod;
 
-  // Get votes with owner info (no flat join)
+  // Fetch voting details for quorum type
+  const [voting] = await db
+    .select({
+      quorumType: votings.quorumType,
+    })
+    .from(votings)
+    .where(eq(votings.id, votingId))
+    .limit(1);
+
+  const quorumType = (voting?.quorumType ?? "simple_all") as QuorumType;
+
+  // Get votes joined with flat data directly (per-flat voting)
   const voteRows = await db
     .select({
       id: votes.id,
@@ -36,67 +48,75 @@ export async function GET(request: NextRequest) {
       voteType: votes.voteType,
       createdAt: votes.createdAt,
       ownerId: votes.ownerId,
+      flatId: votes.flatId,
       disputed: votes.disputed,
+      auditHash: votes.auditHash,
       ownerName: users.name,
+      flatNumber: flats.flatNumber,
+      shareNumerator: flats.shareNumerator,
+      shareDenominator: flats.shareDenominator,
+      area: flats.area,
     })
     .from(votes)
     .leftJoin(users, eq(votes.ownerId, users.id))
+    .innerJoin(flats, eq(votes.flatId, flats.id))
     .where(eq(votes.votingId, votingId));
 
-  // Check if current user has voted
-  const userVote = voteRows.find((v) => v.ownerId === session.user.id);
+  // Build VoteWithShare array — 1:1 with flat
+  const votesWithShare: VoteWithShare[] = voteRows.map((v) => ({
+    choice: v.choice as VoteChoice,
+    shareNumerator: v.shareNumerator,
+    shareDenominator: v.shareDenominator,
+    area: v.area,
+  }));
 
-  // Get all flats for all voters via userFlats
-  const voterIds = [...new Set(voteRows.map((v) => v.ownerId))];
+  // Calculate total possible weight from all flats in the building
+  const allFlats = await db
+    .select({
+      shareNumerator: flats.shareNumerator,
+      shareDenominator: flats.shareDenominator,
+      area: flats.area,
+    })
+    .from(flats);
 
-  let votesWithShare: VoteWithShare[] = [];
-
-  if (voterIds.length > 0) {
-    const voterFlatRows = await db
-      .select({
-        userId: userFlats.userId,
-        shareNumerator: flats.shareNumerator,
-        shareDenominator: flats.shareDenominator,
-        area: flats.area,
-      })
-      .from(userFlats)
-      .innerJoin(flats, eq(userFlats.flatId, flats.id))
-      .where(inArray(userFlats.userId, voterIds));
-
-    // Group by userId
-    const voterFlatsMap = new Map<
-      string,
-      { shareNumerator: number; shareDenominator: number; area: number | null }[]
-    >();
-    for (const row of voterFlatRows) {
-      const list = voterFlatsMap.get(row.userId) || [];
-      list.push({
-        shareNumerator: row.shareNumerator,
-        shareDenominator: row.shareDenominator,
-        area: row.area,
-      });
-      voterFlatsMap.set(row.userId, list);
+  let totalPossibleWeight = 0;
+  for (const f of allFlats) {
+    switch (votingMethod) {
+      case "per_flat":
+        totalPossibleWeight += 1;
+        break;
+      case "per_area":
+        totalPossibleWeight += f.area ?? 1;
+        break;
+      case "per_share":
+      default:
+        totalPossibleWeight += f.shareNumerator / f.shareDenominator;
+        break;
     }
-
-    // Aggregate per voter
-    votesWithShare = voteRows
-      .filter((v) => voterFlatsMap.has(v.ownerId))
-      .map((v) =>
-        aggregateFlatsForVoter(
-          v.choice as VoteChoice,
-          voterFlatsMap.get(v.ownerId)!
-        )
-      );
   }
 
-  const results = calculateResults(votesWithShare, votingMethod);
+  const results = calculateResults(votesWithShare, votingMethod, quorumType, totalPossibleWeight);
+
+  // Find which flats the current user has voted for in this voting
+  const userVotedFlats = voteRows
+    .filter((v) => v.ownerId === session.user.id)
+    .map((v) => ({ flatId: v.flatId, choice: v.choice }));
+
+  // Get all flats the current user owns (for flat selector UI)
+  const currentUserFlats = await db
+    .select({
+      flatId: userFlats.flatId,
+      flatNumber: flats.flatNumber,
+    })
+    .from(userFlats)
+    .innerJoin(flats, eq(userFlats.flatId, flats.id))
+    .where(eq(userFlats.userId, session.user.id));
 
   return NextResponse.json({
     votes: voteRows,
     results,
-    userVote: userVote
-      ? { id: userVote.id, choice: userVote.choice }
-      : null,
+    userVotedFlats,
+    userFlats: currentUserFlats,
     totalVotes: voteRows.length,
   });
 }
@@ -108,11 +128,11 @@ export async function POST(request: NextRequest) {
   }
 
   const body = await request.json();
-  const { votingId, choice, ownerId, voteType } = body;
+  const { votingId, choice, flatId, ownerId, voteType } = body;
 
-  if (!votingId || !choice) {
+  if (!votingId || !choice || !flatId) {
     return NextResponse.json(
-      { error: "votingId a choice sú povinné" },
+      { error: "votingId, choice a flatId sú povinné" },
       { status: 400 }
     );
   }
@@ -131,7 +151,7 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  // Check voting is active
+  // Check voting is active and get type info
   const [voting] = await db
     .select()
     .from(votings)
@@ -145,34 +165,157 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  // Check if already voted
+  // Block electronic votes for meeting-type votings
+  if (!isPaperVote && voting.votingType === "meeting") {
+    return NextResponse.json(
+      { error: "Elektronické hlasovanie nie je povolené pre hlasovanie na schôdzi" },
+      { status: 400 }
+    );
+  }
+
+  // Block electronic votes when initiated by owners_quarter
+  if (!isPaperVote && voting.initiatedBy === "owners_quarter") {
+    return NextResponse.json(
+      { error: "Elektronické hlasovanie nie je povolené pre hlasovanie iniciované štvrtinou vlastníkov" },
+      { status: 400 }
+    );
+  }
+
+  // Validate voter owns the flat
+  const [ownerFlat] = await db
+    .select()
+    .from(userFlats)
+    .where(
+      and(
+        eq(userFlats.userId, voterId),
+        eq(userFlats.flatId, flatId)
+      )
+    )
+    .limit(1);
+
+  if (!ownerFlat) {
+    return NextResponse.json(
+      { error: "Vlastník nevlastní tento byt" },
+      { status: 400 }
+    );
+  }
+
+  // Check unique vote per flat (not per owner)
   const existingVote = await db
     .select()
     .from(votes)
-    .where(and(eq(votes.votingId, votingId), eq(votes.ownerId, voterId)))
+    .where(and(eq(votes.votingId, votingId), eq(votes.flatId, flatId)))
     .limit(1);
 
   if (existingVote.length > 0) {
     return NextResponse.json(
-      { error: "Tento vlastník už hlasoval" },
+      { error: "Za tento byt už bolo hlasované" },
       { status: 400 }
     );
   }
 
   const now = new Date();
-  const auditHash = generateAuditHash(votingId, voterId, choice, now);
+  const auditHash = generateAuditHash(votingId, voterId, flatId, choice, now);
 
-  const [vote] = await db
-    .insert(votes)
-    .values({
-      votingId,
-      ownerId: voterId,
-      choice,
-      voteType: isPaperVote ? "paper" : "electronic",
-      recordedById: isPaperVote ? session.user.id : null,
-      auditHash,
-    })
-    .returning();
+  const requireEmail = process.env.REQUIRE_VOTE_EMAIL === "true";
 
-  return NextResponse.json(vote, { status: 201 });
+  if (requireEmail && !isPaperVote) {
+    // Transaction mode: insert vote, send email, commit or rollback
+    try {
+      const result = await db.transaction(async (tx) => {
+        const [vote] = await tx
+          .insert(votes)
+          .values({
+            votingId,
+            ownerId: voterId,
+            flatId,
+            choice,
+            voteType: "electronic",
+            auditHash,
+          })
+          .returning();
+
+        // Get voter email and flat number
+        const [voter] = await tx
+          .select({ email: users.email, name: users.name })
+          .from(users)
+          .where(eq(users.id, voterId))
+          .limit(1);
+
+        const [flat] = await tx
+          .select({ flatNumber: flats.flatNumber })
+          .from(flats)
+          .where(eq(flats.id, flatId))
+          .limit(1);
+
+        const emailSent = await sendVoteConfirmation({
+          recipientEmail: voter.email,
+          voterName: voter.name,
+          votingTitle: voting.title,
+          flatNumber: flat.flatNumber,
+          choice,
+          timestamp: now,
+          auditHash,
+        });
+
+        if (!emailSent) {
+          throw new Error("Email confirmation failed");
+        }
+
+        return vote;
+      });
+
+      return NextResponse.json(result, { status: 201 });
+    } catch {
+      return NextResponse.json(
+        { error: "Nepodarilo sa odoslať potvrdzujúci email. Hlas nebol zaznamenaný." },
+        { status: 500 }
+      );
+    }
+  } else {
+    // Best-effort mode: insert vote, fire-and-forget email
+    const [vote] = await db
+      .insert(votes)
+      .values({
+        votingId,
+        ownerId: voterId,
+        flatId,
+        choice,
+        voteType: isPaperVote ? "paper" : "electronic",
+        recordedById: isPaperVote ? session.user.id : null,
+        auditHash,
+      })
+      .returning();
+
+    // Fire-and-forget email for electronic votes
+    if (!isPaperVote) {
+      const [voter] = await db
+        .select({ email: users.email, name: users.name })
+        .from(users)
+        .where(eq(users.id, voterId))
+        .limit(1);
+
+      const [flat] = await db
+        .select({ flatNumber: flats.flatNumber })
+        .from(flats)
+        .where(eq(flats.id, flatId))
+        .limit(1);
+
+      if (voter && flat) {
+        sendVoteConfirmation({
+          recipientEmail: voter.email,
+          voterName: voter.name,
+          votingTitle: voting.title,
+          flatNumber: flat.flatNumber,
+          choice,
+          timestamp: now,
+          auditHash,
+        }).catch(() => {
+          // Silently ignore email failures in best-effort mode
+        });
+      }
+    }
+
+    return NextResponse.json({ ...vote, auditHash }, { status: 201 });
+  }
 }

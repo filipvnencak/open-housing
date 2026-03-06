@@ -10,6 +10,11 @@ interface Owner {
   flatNumber: string;
 }
 
+interface OwnerFlat {
+  flatId: string;
+  flatNumber: string;
+}
+
 interface PaperVoteModalProps {
   isOpen: boolean;
   votingId: string;
@@ -34,6 +39,8 @@ export default function PaperVoteModal({
   const tCommon = useTranslations("Common");
   const [owners, setOwners] = useState<Owner[]>([]);
   const [selectedOwner, setSelectedOwner] = useState("");
+  const [ownerFlats, setOwnerFlats] = useState<OwnerFlat[]>([]);
+  const [selectedFlat, setSelectedFlat] = useState("");
   const [selectedChoice, setSelectedChoice] = useState<VoteChoice | "">("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -47,11 +54,31 @@ export default function PaperVoteModal({
     }
   }, [isOpen]);
 
+  // Fetch flats when owner is selected
+  useEffect(() => {
+    if (selectedOwner) {
+      fetch(`/api/flats?userId=${selectedOwner}`)
+        .then((r) => r.json())
+        .then((data: OwnerFlat[]) => {
+          setOwnerFlats(data);
+          if (data.length === 1) {
+            setSelectedFlat(data[0].flatId);
+          } else {
+            setSelectedFlat("");
+          }
+        })
+        .catch(() => setOwnerFlats([]));
+    } else {
+      setOwnerFlats([]);
+      setSelectedFlat("");
+    }
+  }, [selectedOwner]);
+
   if (!isOpen) return null;
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!selectedOwner || !selectedChoice) return;
+    if (!selectedOwner || !selectedChoice || !selectedFlat) return;
 
     setLoading(true);
     setError("");
@@ -62,6 +89,7 @@ export default function PaperVoteModal({
       body: JSON.stringify({
         votingId,
         ownerId: selectedOwner,
+        flatId: selectedFlat,
         choice: selectedChoice,
         voteType: "paper",
       }),
@@ -76,6 +104,7 @@ export default function PaperVoteModal({
 
     setLoading(false);
     setSelectedOwner("");
+    setSelectedFlat("");
     setSelectedChoice("");
     onRecorded();
   }
@@ -121,6 +150,27 @@ export default function PaperVoteModal({
             </select>
           </div>
 
+          {ownerFlats.length > 1 && (
+            <div>
+              <label className="block text-base font-medium text-gray-700 mb-1">
+                {t("flatLabel")}
+              </label>
+              <select
+                value={selectedFlat}
+                onChange={(e) => setSelectedFlat(e.target.value)}
+                required
+                className="w-full px-4 py-3 text-base border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+              >
+                <option value="">{t("flatPlaceholder")}</option>
+                {ownerFlats.map((f) => (
+                  <option key={f.flatId} value={f.flatId}>
+                    {t("flat", { number: f.flatNumber })}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
           <div>
             <label className="block text-base font-medium text-gray-700 mb-2">
               {t("voteLabel")}
@@ -161,7 +211,7 @@ export default function PaperVoteModal({
             </button>
             <button
               type="submit"
-              disabled={loading || !selectedOwner || !selectedChoice}
+              disabled={loading || !selectedOwner || !selectedChoice || !selectedFlat}
               className="flex-1 py-3 px-4 text-base font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 rounded-lg transition-colors"
             >
               {loading ? tCommon("saving") : t("submit")}

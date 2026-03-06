@@ -1,5 +1,5 @@
 import { createHash } from "crypto";
-import type { VoteChoice, VoteWithShare, VotingMethod, VotingResults } from "@/types";
+import type { VoteChoice, VoteWithShare, VotingMethod, VotingResults, QuorumType } from "@/types";
 
 function getWeight(vote: VoteWithShare, method: VotingMethod): number {
   switch (method) {
@@ -15,7 +15,9 @@ function getWeight(vote: VoteWithShare, method: VotingMethod): number {
 
 export function calculateResults(
   votes: VoteWithShare[],
-  method: VotingMethod = "per_share"
+  method: VotingMethod = "per_share",
+  quorumType: QuorumType = "simple_all",
+  totalPossibleWeight: number = 0
 ): VotingResults {
   let zaWeight = 0;
   let protiWeight = 0;
@@ -30,6 +32,28 @@ export function calculateResults(
     if (vote.choice === "zdrzal_sa") zdrzalSaWeight += weight;
   }
 
+  let passed = false;
+  let quorumReached = false;
+
+  switch (quorumType) {
+    case "simple_present":
+      // Passed if za > 50% of voted weight
+      quorumReached = totalWeight > 0;
+      passed = zaWeight > totalWeight / 2;
+      break;
+    case "simple_all":
+      // Passed if za > 50% of ALL flat weight
+      quorumReached = totalPossibleWeight > 0 && zaWeight > totalPossibleWeight / 2;
+      passed = quorumReached;
+      break;
+    case "two_thirds_all":
+      // Passed if za >= 66.7% of ALL flat weight
+      quorumReached =
+        totalPossibleWeight > 0 && zaWeight >= (totalPossibleWeight * 2) / 3;
+      passed = quorumReached;
+      break;
+  }
+
   return {
     za: zaWeight,
     proti: protiWeight,
@@ -38,7 +62,10 @@ export function calculateResults(
     zaPercent: totalWeight > 0 ? (zaWeight / totalWeight) * 100 : 0,
     protiPercent: totalWeight > 0 ? (protiWeight / totalWeight) * 100 : 0,
     zdrzalSaPercent: totalWeight > 0 ? (zdrzalSaWeight / totalWeight) * 100 : 0,
-    passed: zaWeight > totalWeight / 2,
+    passed,
+    quorumReached,
+    quorumType,
+    totalPossibleWeight,
   };
 }
 
@@ -115,9 +142,11 @@ function lcmOf(a: number, b: number): number {
 export function generateAuditHash(
   votingId: string,
   ownerId: string,
+  flatId: string,
   choice: string,
   timestamp: Date
 ): string {
-  const data = `${votingId}${ownerId}${choice}${timestamp.toISOString()}`;
+  const secret = process.env.NEXTAUTH_SECRET || "";
+  const data = `${votingId}${ownerId}${flatId}${choice}${timestamp.toISOString()}${secret}`;
   return createHash("sha256").update(data).digest("hex");
 }

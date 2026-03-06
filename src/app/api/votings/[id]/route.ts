@@ -23,6 +23,9 @@ export async function GET(
       title: votings.title,
       description: votings.description,
       status: votings.status,
+      votingType: votings.votingType,
+      initiatedBy: votings.initiatedBy,
+      quorumType: votings.quorumType,
       startsAt: votings.startsAt,
       endsAt: votings.endsAt,
       createdAt: votings.createdAt,
@@ -67,6 +70,9 @@ export async function PATCH(
   if (body.startsAt !== undefined) updateData.startsAt = new Date(body.startsAt);
   if (body.endsAt !== undefined) updateData.endsAt = new Date(body.endsAt);
   if (body.voteCounterId !== undefined) updateData.voteCounterId = body.voteCounterId;
+  if (body.votingType !== undefined) updateData.votingType = body.votingType;
+  if (body.initiatedBy !== undefined) updateData.initiatedBy = body.initiatedBy;
+  if (body.quorumType !== undefined) updateData.quorumType = body.quorumType;
 
   const [updated] = await db
     .update(votings)

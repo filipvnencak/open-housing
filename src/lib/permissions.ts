@@ -8,7 +8,7 @@ const permissions = {
   recordPaperVote: ["admin", "vote_counter"],
   viewVotingResults: ["admin", "owner", "caretaker"],
   assignVoteCounter: ["admin"],
-  grantMandate: ["admin", "owner"],
+  grantMandate: ["admin"],
   manageUsers: ["admin"],
   viewSettings: ["admin", "caretaker"],
   manageSettings: ["admin"],

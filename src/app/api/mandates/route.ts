@@ -12,16 +12,32 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Neautorizovaný prístup" }, { status: 401 });
   }
 
+  // Only admin can create mandates
   if (!hasPermission(session.user.role as UserRole, "grantMandate")) {
-    return NextResponse.json({ error: "Nemáte oprávnenie" }, { status: 403 });
+    return NextResponse.json({ error: "Iba administrátor môže vytvárať splnomocnenia" }, { status: 403 });
   }
 
   const body = await request.json();
-  const { votingId, toOwnerId } = body;
+  const {
+    votingId,
+    fromFlatId,
+    fromOwnerId,
+    toOwnerId,
+    paperDocumentConfirmed,
+    verificationNote,
+  } = body;
 
-  if (!votingId || !toOwnerId) {
+  if (!votingId || !fromFlatId || !fromOwnerId || !toOwnerId) {
     return NextResponse.json(
-      { error: "votingId a toOwnerId sú povinné" },
+      { error: "votingId, fromFlatId, fromOwnerId a toOwnerId sú povinné" },
+      { status: 400 }
+    );
+  }
+
+  // Require paper document confirmation
+  if (!paperDocumentConfirmed) {
+    return NextResponse.json(
+      { error: "Splnomocnenie vyžaduje potvrdenie listinného dokumentu s úradne osvedčeným podpisom" },
       { status: 400 }
     );
   }
@@ -40,14 +56,14 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  // Check if mandate already exists
+  // Check if mandate already exists for this flat in this voting
   const existing = await db
     .select()
     .from(mandates)
     .where(
       and(
         eq(mandates.votingId, votingId),
-        eq(mandates.fromOwnerId, session.user.id),
+        eq(mandates.fromFlatId, fromFlatId),
         eq(mandates.isActive, true)
       )
     )
@@ -55,7 +71,27 @@ export async function POST(request: NextRequest) {
 
   if (existing.length > 0) {
     return NextResponse.json(
-      { error: "Už máte aktívne splnomocnenie pre toto hlasovanie" },
+      { error: "Pre tento byt už existuje aktívne splnomocnenie v tomto hlasovaní" },
+      { status: 400 }
+    );
+  }
+
+  // Chain mandate validation: check if toOwnerId already delegated from another flat
+  const chainCheck = await db
+    .select()
+    .from(mandates)
+    .where(
+      and(
+        eq(mandates.votingId, votingId),
+        eq(mandates.fromOwnerId, toOwnerId),
+        eq(mandates.isActive, true)
+      )
+    )
+    .limit(1);
+
+  if (chainCheck.length > 0) {
+    return NextResponse.json(
+      { error: "Príjemca splnomocnenia už delegoval svoj hlas — reťazenie splnomocnení nie je povolené" },
       { status: 400 }
     );
   }
@@ -64,8 +100,13 @@ export async function POST(request: NextRequest) {
     .insert(mandates)
     .values({
       votingId,
-      fromOwnerId: session.user.id,
+      fromOwnerId,
+      fromFlatId,
       toOwnerId,
+      paperDocumentConfirmed: true,
+      verifiedByAdminId: session.user.id,
+      verificationDate: new Date(),
+      verificationNote: verificationNote || null,
     })
     .returning();
 

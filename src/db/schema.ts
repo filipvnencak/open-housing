@@ -48,6 +48,19 @@ export const votingMethodEnum = pgEnum("voting_method", [
   "per_area",
 ]);
 
+export const votingTypeEnum = pgEnum("voting_type", ["written", "meeting"]);
+
+export const votingInitiatedByEnum = pgEnum("voting_initiated_by", [
+  "board",
+  "owners_quarter",
+]);
+
+export const quorumTypeEnum = pgEnum("quorum_type", [
+  "simple_present",
+  "simple_all",
+  "two_thirds_all",
+]);
+
 // ── Tables ─────────────────────────────────────────────
 
 export const building = pgTable("building", {
@@ -110,42 +123,75 @@ export const votings = pgTable("votings", {
   createdById: uuid("created_by_id")
     .references(() => users.id)
     .notNull(),
+  votingType: votingTypeEnum("voting_type").notNull().default("written"),
+  initiatedBy: votingInitiatedByEnum("initiated_by").notNull().default("board"),
+  quorumType: quorumTypeEnum("quorum_type").notNull().default("simple_all"),
   voteCounterId: uuid("vote_counter_id").references(() => users.id),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
-export const votes = pgTable("votes", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  votingId: uuid("voting_id")
-    .references(() => votings.id)
-    .notNull(),
-  ownerId: uuid("owner_id")
-    .references(() => users.id)
-    .notNull(),
-  choice: voteChoiceEnum("choice").notNull(),
-  voteType: voteTypeEnum("vote_type").notNull().default("electronic"),
-  recordedById: uuid("recorded_by_id").references(() => users.id),
-  paperPhotoUrl: varchar("paper_photo_url", { length: 1000 }),
-  auditHash: varchar("audit_hash", { length: 64 }).notNull(),
-  disputed: boolean("disputed").notNull().default(false),
-  disputeNote: text("dispute_note"),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-});
+export const votes = pgTable(
+  "votes",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    votingId: uuid("voting_id")
+      .references(() => votings.id)
+      .notNull(),
+    ownerId: uuid("owner_id")
+      .references(() => users.id)
+      .notNull(),
+    flatId: uuid("flat_id")
+      .references(() => flats.id)
+      .notNull(),
+    choice: voteChoiceEnum("choice").notNull(),
+    voteType: voteTypeEnum("vote_type").notNull().default("electronic"),
+    recordedById: uuid("recorded_by_id").references(() => users.id),
+    paperPhotoUrl: varchar("paper_photo_url", { length: 1000 }),
+    auditHash: varchar("audit_hash", { length: 64 }).notNull(),
+    disputed: boolean("disputed").notNull().default(false),
+    disputeNote: text("dispute_note"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    votingFlatIdx: uniqueIndex("votes_voting_flat_idx").on(
+      table.votingId,
+      table.flatId
+    ),
+  })
+);
 
-export const mandates = pgTable("mandates", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  votingId: uuid("voting_id")
-    .references(() => votings.id)
-    .notNull(),
-  fromOwnerId: uuid("from_owner_id")
-    .references(() => users.id)
-    .notNull(),
-  toOwnerId: uuid("to_owner_id")
-    .references(() => users.id)
-    .notNull(),
-  isActive: boolean("is_active").notNull().default(true),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-});
+export const mandates = pgTable(
+  "mandates",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    votingId: uuid("voting_id")
+      .references(() => votings.id)
+      .notNull(),
+    fromOwnerId: uuid("from_owner_id")
+      .references(() => users.id)
+      .notNull(),
+    fromFlatId: uuid("from_flat_id")
+      .references(() => flats.id)
+      .notNull(),
+    toOwnerId: uuid("to_owner_id")
+      .references(() => users.id)
+      .notNull(),
+    paperDocumentConfirmed: boolean("paper_document_confirmed")
+      .notNull()
+      .default(false),
+    verifiedByAdminId: uuid("verified_by_admin_id").references(() => users.id),
+    verificationDate: timestamp("verification_date"),
+    verificationNote: text("verification_note"),
+    isActive: boolean("is_active").notNull().default(true),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    votingFlatIdx: uniqueIndex("mandates_voting_flat_idx").on(
+      table.votingId,
+      table.fromFlatId
+    ),
+  })
+);
 
 export const posts = pgTable("posts", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -233,6 +279,8 @@ export const flatsRelations = relations(flats, ({ one, many }) => ({
   }),
   users: many(users),
   userFlats: many(userFlats),
+  votes: many(votes),
+  mandates: many(mandates),
 }));
 
 export const usersRelations = relations(users, ({ one, many }) => ({
@@ -270,6 +318,10 @@ export const votesRelations = relations(votes, ({ one }) => ({
     fields: [votes.ownerId],
     references: [users.id],
   }),
+  flat: one(flats, {
+    fields: [votes.flatId],
+    references: [flats.id],
+  }),
   recordedBy: one(users, {
     fields: [votes.recordedById],
     references: [users.id],
@@ -284,6 +336,10 @@ export const mandatesRelations = relations(mandates, ({ one }) => ({
   fromOwner: one(users, {
     fields: [mandates.fromOwnerId],
     references: [users.id],
+  }),
+  fromFlat: one(flats, {
+    fields: [mandates.fromFlatId],
+    references: [flats.id],
   }),
   toOwner: one(users, {
     fields: [mandates.toOwnerId],

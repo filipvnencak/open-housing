@@ -3,10 +3,23 @@
 import { useState, useEffect } from "react";
 import { useTranslations } from "next-intl";
 
+interface Flat {
+  id: string;
+  flatNumber: string;
+  entranceName: string | null;
+}
+
 interface Owner {
   id: string;
   name: string;
   flatNumber: string;
+}
+
+interface FlatOwner {
+  flatId: string;
+  flatNumber: string;
+  userId: string;
+  userName: string;
 }
 
 interface MandateModalProps {
@@ -26,27 +39,62 @@ export default function MandateModal({
 }: MandateModalProps) {
   const t = useTranslations("Mandate");
   const tCommon = useTranslations("Common");
+  const [allFlats, setAllFlats] = useState<Flat[]>([]);
   const [owners, setOwners] = useState<Owner[]>([]);
-  const [selectedOwner, setSelectedOwner] = useState("");
+  const [selectedFlat, setSelectedFlat] = useState("");
+  const [flatOwnerName, setFlatOwnerName] = useState("");
+  const [flatOwnerId, setFlatOwnerId] = useState("");
+  const [selectedToOwner, setSelectedToOwner] = useState("");
+  const [paperConfirmed, setPaperConfirmed] = useState(false);
+  const [verificationNote, setVerificationNote] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
   useEffect(() => {
     if (isOpen) {
+      // Fetch all flats
+      fetch("/api/flats")
+        .then((r) => r.json())
+        .then((data: Flat[]) => setAllFlats(data))
+        .catch(() => setAllFlats([]));
+
+      // Fetch all owners
       fetch("/api/users?role=owner")
         .then((r) => r.json())
-        .then((data: Owner[]) =>
-          setOwners(data.filter((o) => o.id !== currentUserId))
-        )
+        .then((data: Owner[]) => setOwners(data))
         .catch(() => setOwners([]));
     }
-  }, [isOpen, currentUserId]);
+  }, [isOpen]);
+
+  // When flat is selected, find the owner via userFlats
+  useEffect(() => {
+    if (selectedFlat) {
+      fetch(`/api/flats/${selectedFlat}/owners`)
+        .then((r) => r.json())
+        .then((data: { userId: string; userName: string }[]) => {
+          if (data.length > 0) {
+            setFlatOwnerId(data[0].userId);
+            setFlatOwnerName(data.map((o) => o.userName).join(", "));
+          } else {
+            setFlatOwnerId("");
+            setFlatOwnerName("—");
+          }
+        })
+        .catch(() => {
+          setFlatOwnerId("");
+          setFlatOwnerName("—");
+        });
+    } else {
+      setFlatOwnerId("");
+      setFlatOwnerName("");
+    }
+  }, [selectedFlat]);
 
   if (!isOpen) return null;
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!selectedOwner) return;
+    if (!selectedFlat || !flatOwnerId || !selectedToOwner || !paperConfirmed) return;
 
     setLoading(true);
     setError("");
@@ -56,7 +104,11 @@ export default function MandateModal({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         votingId,
-        toOwnerId: selectedOwner,
+        fromFlatId: selectedFlat,
+        fromOwnerId: flatOwnerId,
+        toOwnerId: selectedToOwner,
+        paperDocumentConfirmed: true,
+        verificationNote: verificationNote || null,
       }),
     });
 
@@ -68,13 +120,17 @@ export default function MandateModal({
     }
 
     setLoading(false);
+    setSelectedFlat("");
+    setSelectedToOwner("");
+    setPaperConfirmed(false);
+    setVerificationNote("");
     onCreated();
     onClose();
   }
 
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl w-full max-w-md p-6">
+      <div className="bg-white rounded-2xl w-full max-w-md p-6 max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-xl font-bold text-gray-900">{t("title")}</h2>
           <button
@@ -96,23 +152,86 @@ export default function MandateModal({
         )}
 
         <form onSubmit={handleSubmit} className="space-y-4">
+          {/* Select flat being delegated */}
+          <div>
+            <label className="block text-base font-medium text-gray-700 mb-1">
+              {t("fromFlatLabel")}
+            </label>
+            <select
+              value={selectedFlat}
+              onChange={(e) => setSelectedFlat(e.target.value)}
+              required
+              className="w-full px-4 py-3 text-base border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+            >
+              <option value="">{t("fromFlatPlaceholder")}</option>
+              {allFlats.map((f) => (
+                <option key={f.id} value={f.id}>
+                  {t("flat", { number: f.flatNumber })}
+                  {f.entranceName ? ` (${f.entranceName})` : ""}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Show owner of selected flat */}
+          {flatOwnerName && (
+            <div>
+              <label className="block text-base font-medium text-gray-700 mb-1">
+                {t("fromOwnerLabel")}
+              </label>
+              <div className="px-4 py-3 text-base bg-gray-50 border border-gray-200 rounded-lg text-gray-700">
+                {flatOwnerName}
+              </div>
+            </div>
+          )}
+
+          {/* Select recipient */}
           <div>
             <label className="block text-base font-medium text-gray-700 mb-1">
               {t("delegateToLabel")}
             </label>
             <select
-              value={selectedOwner}
-              onChange={(e) => setSelectedOwner(e.target.value)}
+              value={selectedToOwner}
+              onChange={(e) => setSelectedToOwner(e.target.value)}
               required
               className="w-full px-4 py-3 text-base border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
             >
               <option value="">{t("ownerPlaceholder")}</option>
-              {owners.map((o) => (
-                <option key={o.id} value={o.id}>
-                  {o.name} ({t("flat", { number: o.flatNumber })})
-                </option>
-              ))}
+              {owners
+                .filter((o) => o.id !== flatOwnerId)
+                .map((o) => (
+                  <option key={o.id} value={o.id}>
+                    {o.name} ({t("flat", { number: o.flatNumber })})
+                  </option>
+                ))}
             </select>
+          </div>
+
+          {/* Paper document confirmation */}
+          <label className="flex items-start gap-3 p-3 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-50">
+            <input
+              type="checkbox"
+              checked={paperConfirmed}
+              onChange={(e) => setPaperConfirmed(e.target.checked)}
+              required
+              className="w-5 h-5 mt-0.5 text-blue-600 rounded"
+            />
+            <span className="text-base text-gray-700">
+              {t("paperDocumentLabel")}
+            </span>
+          </label>
+
+          {/* Verification note */}
+          <div>
+            <label className="block text-base font-medium text-gray-700 mb-1">
+              {t("verificationNoteLabel")}
+            </label>
+            <textarea
+              value={verificationNote}
+              onChange={(e) => setVerificationNote(e.target.value)}
+              rows={2}
+              className="w-full px-4 py-3 text-base border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none resize-vertical"
+            />
           </div>
 
           <div className="flex gap-3 pt-2">
@@ -125,7 +244,7 @@ export default function MandateModal({
             </button>
             <button
               type="submit"
-              disabled={loading || !selectedOwner}
+              disabled={loading || !selectedFlat || !selectedToOwner || !paperConfirmed}
               className="flex-1 py-3 px-4 text-base font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 rounded-lg transition-colors"
             >
               {loading ? tCommon("saving") : tCommon("confirm")}

@@ -1,12 +1,18 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import type { VotingResults as VotingResultsType } from "@/types";
+import type { VotingResults as VotingResultsType, QuorumType } from "@/types";
 
 interface VotingResultsProps {
   results: VotingResultsType;
   totalVotes: number;
 }
+
+const quorumKeys: Record<QuorumType, string> = {
+  simple_present: "quorumSimplePresent",
+  simple_all: "quorumSimpleAll",
+  two_thirds_all: "quorumTwoThirdsAll",
+};
 
 function ResultBar({
   label,
@@ -62,6 +68,26 @@ export default function VotingResults({
           color="bg-gray-400"
         />
       </div>
+
+      {/* Quorum status */}
+      {results.quorumType && (
+        <div className="flex items-center justify-between py-3 border-t border-gray-200 mb-2">
+          <span className="text-sm text-gray-500">
+            {t(quorumKeys[results.quorumType])}
+          </span>
+          <span
+            className={`px-3 py-1 rounded-lg text-sm font-bold ${
+              results.quorumReached
+                ? "bg-green-100 text-green-700"
+                : "bg-amber-100 text-amber-700"
+            }`}
+          >
+            {results.quorumReached
+              ? t("quorumReached")
+              : t("quorumNotReached")}
+          </span>
+        </div>
+      )}
 
       <div className="flex items-center justify-between pt-4 border-t border-gray-200">
         <span className="text-base text-gray-500">

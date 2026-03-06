@@ -2,7 +2,7 @@
 
 import { useTranslations, useFormatter } from "next-intl";
 import { Link } from "@/i18n/navigation";
-import type { VotingStatus } from "@/types";
+import type { VotingStatus, VotingType } from "@/types";
 
 const statusKeys: Record<VotingStatus, string> = {
   draft: "statusDraft",
@@ -20,6 +20,7 @@ interface VotingCardProps {
   id: string;
   title: string;
   status: VotingStatus;
+  votingType?: VotingType;
   startsAt: string;
   endsAt: string;
   createdByName: string;
@@ -29,6 +30,7 @@ export default function VotingCard({
   id,
   title,
   status,
+  votingType,
   startsAt,
   endsAt,
   createdByName,
@@ -44,11 +46,24 @@ export default function VotingCard({
     >
       <div className="flex items-start justify-between gap-4 mb-3">
         <h3 className="text-lg font-semibold text-gray-900">{title}</h3>
-        <span
-          className={`px-3 py-1 rounded-full text-sm font-medium whitespace-nowrap ${style.bg} ${style.text}`}
-        >
-          {t(statusKeys[status])}
-        </span>
+        <div className="flex gap-2 flex-shrink-0">
+          {votingType && (
+            <span
+              className={`px-3 py-1 rounded-full text-sm font-medium whitespace-nowrap ${
+                votingType === "meeting"
+                  ? "bg-purple-100 text-purple-700"
+                  : "bg-blue-100 text-blue-700"
+              }`}
+            >
+              {votingType === "meeting" ? t("typeMeeting") : t("typeWritten")}
+            </span>
+          )}
+          <span
+            className={`px-3 py-1 rounded-full text-sm font-medium whitespace-nowrap ${style.bg} ${style.text}`}
+          >
+            {t(statusKeys[status])}
+          </span>
+        </div>
       </div>
 
       <div className="flex flex-wrap gap-4 text-sm text-gray-500">

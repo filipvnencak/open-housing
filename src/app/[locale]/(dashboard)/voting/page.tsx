@@ -6,12 +6,13 @@ import { useEffect, useState } from "react";
 import { Link } from "@/i18n/navigation";
 import VotingCard from "@/components/voting/VotingCard";
 import { hasPermission } from "@/lib/permissions";
-import type { UserRole, VotingStatus } from "@/types";
+import type { UserRole, VotingStatus, VotingType } from "@/types";
 
 interface VotingData {
   id: string;
   title: string;
   status: VotingStatus;
+  votingType?: VotingType;
   startsAt: string;
   endsAt: string;
   createdAt: string;
@@ -76,6 +77,7 @@ export default function HlasovaniePage() {
               id={v.id}
               title={v.title}
               status={v.status}
+              votingType={v.votingType}
               startsAt={v.startsAt}
               endsAt={v.endsAt}
               createdByName={v.createdBy?.name || tCommon("unknown")}

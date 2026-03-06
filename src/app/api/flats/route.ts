@@ -1,17 +1,39 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/db";
-import { flats, entrances } from "@/db/schema";
+import { flats, entrances, userFlats } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { hasPermission } from "@/lib/permissions";
 import type { UserRole } from "@/types";
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   const session = await auth();
   if (!session) {
     return NextResponse.json({ error: "Neautorizovaný prístup" }, { status: 401 });
   }
 
+  const { searchParams } = new URL(request.url);
+  const userId = searchParams.get("userId");
+
+  // If userId is provided, return flats for that user
+  if (userId) {
+    const result = await db
+      .select({
+        flatId: flats.id,
+        flatNumber: flats.flatNumber,
+        floor: flats.floor,
+        entranceName: entrances.name,
+      })
+      .from(userFlats)
+      .innerJoin(flats, eq(userFlats.flatId, flats.id))
+      .leftJoin(entrances, eq(flats.entranceId, entrances.id))
+      .where(eq(userFlats.userId, userId))
+      .orderBy(flats.flatNumber);
+
+    return NextResponse.json(result);
+  }
+
+  // Default: return all flats
   const result = await db
     .select({
       id: flats.id,

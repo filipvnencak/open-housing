@@ -10,6 +10,7 @@ import {
   userFlats,
   votings,
   votes,
+  mandates,
   posts,
 } from "./schema";
 import { generateAuditHash } from "../lib/voting";
@@ -24,6 +25,7 @@ async function seed() {
 
   // Clear existing data (in reverse FK order)
   await db.delete(votes);
+  await db.delete(mandates);
   await db.delete(posts);
   await db.delete(votings);
   await db.delete(userFlats);
@@ -164,7 +166,7 @@ async function seed() {
   }
   console.log("Created 2 tenants");
 
-  // Active voting
+  // Active voting — written type, board initiated, simple_all quorum
   const now = new Date();
   const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
   const weekLater = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
@@ -176,6 +178,9 @@ async function seed() {
       description:
         "Hlasovanie o schválení opravy strechy v celkovej hodnote 15 000 EUR. Oprava zahŕňa výmenu strešnej krytiny a opravu odkvapov.",
       status: "active",
+      votingType: "written",
+      initiatedBy: "board",
+      quorumType: "simple_all",
       startsAt: weekAgo,
       endsAt: weekLater,
       createdById: admin.id,
@@ -183,11 +188,14 @@ async function seed() {
     .returning();
   console.log("Created active voting:", activeVoting.title);
 
-  // Cast some votes on active voting
+  // Cast some votes on active voting — per flat now
+  // ownerIds[0] = Ján Novák (flats 0, 6) — vote for flat 0
+  // ownerIds[1] = Mária Kováčová (flat 1)
+  // ownerIds[2] = Peter Horváth (flat 2)
   const voteData = [
-    { ownerId: ownerIds[0], choice: "za" as const },
-    { ownerId: ownerIds[1], choice: "za" as const },
-    { ownerId: ownerIds[2], choice: "proti" as const },
+    { ownerId: ownerIds[0], flatIdx: 0, choice: "za" as const },
+    { ownerId: ownerIds[1], flatIdx: 1, choice: "za" as const },
+    { ownerId: ownerIds[2], flatIdx: 2, choice: "proti" as const },
   ];
 
   for (const v of voteData) {
@@ -195,19 +203,21 @@ async function seed() {
     await db.insert(votes).values({
       votingId: activeVoting.id,
       ownerId: v.ownerId,
+      flatId: allFlats[v.flatIdx].id,
       choice: v.choice,
       voteType: "electronic",
       auditHash: generateAuditHash(
         activeVoting.id,
         v.ownerId,
+        allFlats[v.flatIdx].id,
         v.choice,
         ts
       ),
     });
   }
-  console.log("Cast 3 votes on active voting");
+  console.log("Cast 3 votes on active voting (per flat)");
 
-  // Closed voting
+  // Closed voting — two_thirds_all quorum
   const monthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
   const twoWeeksAgo = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000);
 
@@ -218,24 +228,57 @@ async function seed() {
       description:
         "Hlasovanie o výmene výťahu vo vchode A. Predpokladaná cena 45 000 EUR.",
       status: "closed",
+      votingType: "written",
+      initiatedBy: "board",
+      quorumType: "two_thirds_all",
       startsAt: monthAgo,
       endsAt: twoWeeksAgo,
       createdById: admin.id,
     })
     .returning();
 
-  for (const ownerId of ownerIds) {
+  // Each owner votes for their first flat
+  const closedVoteFlats = [0, 1, 2, 4]; // flatIdx for each owner
+  for (let i = 0; i < ownerIds.length; i++) {
     const choice = Math.random() > 0.3 ? "za" : "proti";
     const ts = new Date(monthAgo.getTime() + Math.random() * 14 * 24 * 60 * 60 * 1000);
     await db.insert(votes).values({
       votingId: closedVoting.id,
-      ownerId,
+      ownerId: ownerIds[i],
+      flatId: allFlats[closedVoteFlats[i]].id,
       choice: choice as "za" | "proti",
       voteType: "electronic",
-      auditHash: generateAuditHash(closedVoting.id, ownerId, choice, ts),
+      auditHash: generateAuditHash(
+        closedVoting.id,
+        ownerIds[i],
+        allFlats[closedVoteFlats[i]].id,
+        choice,
+        ts
+      ),
     });
   }
   console.log("Created closed voting with 4 votes");
+
+  // Draft voting — meeting type (for testing)
+  const nextWeek = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+  const twoWeeksLater = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000);
+
+  await db
+    .insert(votings)
+    .values({
+      title: "Schôdza vlastníkov — plán údržby 2026",
+      description:
+        "Hlasovanie na schôdzi o pláne údržby na rok 2026. Elektronické hlasovanie nie je povolené.",
+      status: "draft",
+      votingType: "meeting",
+      initiatedBy: "board",
+      quorumType: "simple_present",
+      startsAt: nextWeek,
+      endsAt: twoWeeksLater,
+      createdById: admin.id,
+    })
+    .returning();
+  console.log("Created draft meeting voting");
 
   // Posts
   const postData = [

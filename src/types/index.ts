@@ -32,6 +32,9 @@ export type VotingStatus = "draft" | "active" | "closed";
 export type PostCategory = "info" | "urgent" | "event" | "maintenance";
 export type InvitationStatus = "pending" | "used" | "expired";
 export type VotingMethod = "per_share" | "per_flat" | "per_area";
+export type VotingType = "written" | "meeting";
+export type VotingInitiatedBy = "board" | "owners_quarter";
+export type QuorumType = "simple_present" | "simple_all" | "two_thirds_all";
 
 export type SafeUser = Omit<User, "passwordHash">;
 
@@ -51,4 +54,7 @@ export interface VotingResults {
   protiPercent: number;
   zdrzalSaPercent: number;
   passed: boolean;
+  quorumReached: boolean;
+  quorumType: QuorumType;
+  totalPossibleWeight: number;
 }

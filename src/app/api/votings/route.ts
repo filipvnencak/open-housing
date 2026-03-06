@@ -18,6 +18,9 @@ export async function GET() {
       title: votings.title,
       description: votings.description,
       status: votings.status,
+      votingType: votings.votingType,
+      initiatedBy: votings.initiatedBy,
+      quorumType: votings.quorumType,
       startsAt: votings.startsAt,
       endsAt: votings.endsAt,
       createdAt: votings.createdAt,
@@ -44,7 +47,7 @@ export async function POST(request: NextRequest) {
   }
 
   const body = await request.json();
-  const { title, description, startsAt, endsAt, status } = body;
+  const { title, description, startsAt, endsAt, status, votingType, initiatedBy, quorumType } = body;
 
   if (!title || !startsAt || !endsAt) {
     return NextResponse.json(
@@ -59,6 +62,9 @@ export async function POST(request: NextRequest) {
       title,
       description: description || null,
       status: status || "draft",
+      votingType: votingType || "written",
+      initiatedBy: initiatedBy || "board",
+      quorumType: quorumType || "simple_all",
       startsAt: new Date(startsAt),
       endsAt: new Date(endsAt),
       createdById: session.user.id,
