@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useTranslations } from "next-intl";
-import type { VotingResults } from "@/types";
+import type { VotingResults, QuorumType } from "@/types";
 
 interface VoteRow {
   id: string;
@@ -18,7 +18,7 @@ interface VotingInfo {
   title: string;
   votingType: string;
   initiatedBy: string;
-  quorumType: string;
+  quorumType: QuorumType;
   startsAt: string;
   endsAt: string;
   createdBy: { name: string } | null;
