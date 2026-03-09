@@ -6,6 +6,14 @@
 
 set -euo pipefail
 
+# --- Load .env if present ---
+if [ -f .env ]; then
+  set -a
+  # shellcheck disable=SC1091
+  source .env
+  set +a
+fi
+
 # --- Configuration ---
 BACKUP_DIR="${BACKUP_DIR:-/backups/resiapp}"
 COMPOSE_FILE="${COMPOSE_FILE:-docker-compose.prod.yml}"
