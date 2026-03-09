@@ -359,6 +359,18 @@
     "roleOwner": "Vlastník",
     "roleTenant": "Nájomca",
     "roleVoteCounter": "Zapisovateľ",
-    "roleCaretaker": "Domovník"
+    "roleCaretaker": "Domovník",
+    "notifications": "Notifikácie"
+  },
+  "Notifications": {
+    "pushNotifications": "Push notifikácie",
+    "pushEnabled": "Notifikácie sú zapnuté na tomto zariadení.",
+    "pushDisabled": "Notifikácie sú vypnuté na tomto zariadení.",
+    "enable": "Zapnúť",
+    "disable": "Vypnúť",
+    "prefNewPost": "Nové príspevky",
+    "prefNewPostDesc": "Upozornenie pri pridaní nového príspevku na nástenku.",
+    "prefVotingStarted": "Nové hlasovanie",
+    "prefVotingStartedDesc": "Upozornenie pri spustení nového hlasovania."
   }
 }

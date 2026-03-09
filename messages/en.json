@@ -359,6 +359,18 @@
     "roleOwner": "Owner",
     "roleTenant": "Tenant",
     "roleVoteCounter": "Vote counter",
-    "roleCaretaker": "Caretaker"
+    "roleCaretaker": "Caretaker",
+    "notifications": "Notifications"
+  },
+  "Notifications": {
+    "pushNotifications": "Push notifications",
+    "pushEnabled": "Notifications are enabled on this device.",
+    "pushDisabled": "Notifications are disabled on this device.",
+    "enable": "Enable",
+    "disable": "Disable",
+    "prefNewPost": "New posts",
+    "prefNewPostDesc": "Get notified when a new post is added to the board.",
+    "prefVotingStarted": "New voting",
+    "prefVotingStartedDesc": "Get notified when a new voting is started."
   }
 }

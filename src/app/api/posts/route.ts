@@ -4,6 +4,7 @@ import { db } from "@/db";
 import { posts, users } from "@/db/schema";
 import { desc, eq, isNull, or } from "drizzle-orm";
 import { hasPermission } from "@/lib/permissions";
+import { sendPushToAll } from "@/lib/push";
 import type { UserRole } from "@/types";
 
 export async function GET(request: NextRequest) {
@@ -73,6 +74,11 @@ export async function POST(request: NextRequest) {
       isPinned: isPinned || false,
     })
     .returning();
+
+  sendPushToAll(
+    { title: "Nový príspevok", body: title, url: "/board" },
+    "newPost"
+  ).catch(() => {});
 
   return NextResponse.json(post, { status: 201 });
 }

@@ -3,6 +3,8 @@
 import { useSession } from "next-auth/react";
 import { useTranslations } from "next-intl";
 import { useState } from "react";
+import PushSubscriptionManager from "@/components/notifications/PushSubscriptionManager";
+import NotificationPreferences from "@/components/notifications/NotificationPreferences";
 import type { UserRole } from "@/types";
 
 const roleKeys: Record<UserRole, string> = {
@@ -161,6 +163,18 @@ export default function ProfilePage() {
             {saving ? t("changing") : t("changePasswordButton")}
           </button>
         </form>
+      </div>
+
+      {/* Notifications card */}
+      <div className="bg-white rounded-xl border border-gray-200 p-6">
+        <h2 className="text-lg font-semibold text-gray-900 mb-4">
+          {t("notifications")}
+        </h2>
+        <div className="space-y-6">
+          <PushSubscriptionManager />
+          <hr className="border-gray-200" />
+          <NotificationPreferences />
+        </div>
       </div>
     </div>
   );

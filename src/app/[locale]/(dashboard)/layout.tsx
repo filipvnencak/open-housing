@@ -6,6 +6,7 @@ import { useTranslations } from "next-intl";
 import { useEffect, useState } from "react";
 import Sidebar from "@/components/layout/Sidebar";
 import Header from "@/components/layout/Header";
+import ServiceWorkerRegistration from "@/components/ServiceWorkerRegistration";
 import type { UserRole } from "@/types";
 
 export default function DashboardLayout({
@@ -34,6 +35,7 @@ export default function DashboardLayout({
 
   return (
     <div className="min-h-screen bg-gray-50 flex">
+      <ServiceWorkerRegistration />
       <Sidebar
         role={session.user.role as UserRole}
         isOpen={sidebarOpen}

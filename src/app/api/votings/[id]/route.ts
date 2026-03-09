@@ -4,6 +4,7 @@ import { db } from "@/db";
 import { votings, users } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { hasPermission } from "@/lib/permissions";
+import { sendPushToAll } from "@/lib/push";
 import type { UserRole } from "@/types";
 
 export async function GET(
@@ -82,6 +83,22 @@ export async function PATCH(
 
   if (!updated) {
     return NextResponse.json({ error: "Hlasovanie nenájdené" }, { status: 404 });
+  }
+
+  // Send push notification when voting becomes active
+  if (body.status === "active") {
+    // Get all owner user IDs
+    const owners = await db
+      .select({ id: users.id })
+      .from(users)
+      .where(eq(users.role, "owner"));
+    const ownerIds = owners.map((o) => o.id);
+
+    sendPushToAll(
+      { title: "Nové hlasovanie", body: updated.title, url: `/voting/${id}` },
+      "votingStarted",
+      ownerIds
+    ).catch(() => {});
   }
 
   return NextResponse.json(updated);

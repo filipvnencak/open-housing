@@ -239,6 +239,37 @@ export const userFlats = pgTable(
   })
 );
 
+export const pushSubscriptions = pgTable(
+  "push_subscriptions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .references(() => users.id, { onDelete: "cascade" })
+      .notNull(),
+    endpoint: text("endpoint").notNull(),
+    p256dh: text("p256dh").notNull(),
+    auth: text("auth").notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    userEndpointIdx: uniqueIndex("push_subscriptions_user_endpoint_idx").on(
+      table.userId,
+      table.endpoint
+    ),
+  })
+);
+
+export const notificationPreferences = pgTable("notification_preferences", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: uuid("user_id")
+    .references(() => users.id, { onDelete: "cascade" })
+    .notNull()
+    .unique(),
+  newPost: boolean("new_post").notNull().default(true),
+  votingStarted: boolean("voting_started").notNull().default(true),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
 export const invitations = pgTable("invitations", {
   id: uuid("id").defaultRandom().primaryKey(),
   token: varchar("token", { length: 64 }).notNull().unique(),
@@ -294,6 +325,7 @@ export const usersRelations = relations(users, ({ one, many }) => ({
   createdVotings: many(votings, { relationName: "createdBy" }),
   posts: many(posts),
   documents: many(documents),
+  pushSubscriptions: many(pushSubscriptions),
 }));
 
 export const votingsRelations = relations(votings, ({ one, many }) => ({
@@ -384,6 +416,20 @@ export const invitationsRelations = relations(invitations, ({ one }) => ({
     fields: [invitations.createdById],
     references: [users.id],
     relationName: "createdInvitations",
+  }),
+}));
+
+export const pushSubscriptionsRelations = relations(pushSubscriptions, ({ one }) => ({
+  user: one(users, {
+    fields: [pushSubscriptions.userId],
+    references: [users.id],
+  }),
+}));
+
+export const notificationPreferencesRelations = relations(notificationPreferences, ({ one }) => ({
+  user: one(users, {
+    fields: [notificationPreferences.userId],
+    references: [users.id],
   }),
 }));
 
