@@ -32,17 +32,21 @@ Available on [Docker Hub](https://hub.docker.com/r/ipk0/open-resiapp). Supports 
 
 You need a VPS with Docker installed (any provider — Hetzner, AWS, Azure, DigitalOcean).
 
-### Option A: Automated setup (recommended)
+### Option A: One-command setup (recommended)
 
 ```bash
 mkdir open-resiapp && cd open-resiapp
 curl -O https://raw.githubusercontent.com/open-resiapp/open-resiapp/main/setup.sh
 chmod +x setup.sh
-./setup.sh              # asks domain + building name, generates secrets
-docker compose up -d
+./setup.sh
 ```
 
-The script generates secure passwords, creates `.env` and `docker-compose.yml` — no manual secret management needed.
+The script asks a few questions (domain, building name, admin email), then does everything automatically:
+- Generates secure passwords (`POSTGRES_PASSWORD`, `NEXTAUTH_SECRET`)
+- Creates `.env` and `docker-compose.yml`
+- Pulls and starts all Docker services
+- Waits for the app to be healthy
+- Creates your admin account and prints the login credentials
 
 ### Option B: Manual setup
 
@@ -120,14 +124,13 @@ docker compose up -d
 
 </details>
 
-### Create admin account
-
-```bash
-docker compose exec app npx tsx src/scripts/create-admin.ts \
-  --email admin@yourdomain.sk --name "Your Name"
-```
-
 That's it. Database migrations run automatically on startup. HTTPS is handled by Caddy.
+
+> The admin account is created automatically by `setup.sh`. If you used manual setup, create it with:
+> ```bash
+> docker compose exec app npx tsx src/scripts/create-admin.ts \
+>   --email admin@yourdomain.sk --name "Your Name"
+> ```
 
 ## Update
 
