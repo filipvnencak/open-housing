@@ -406,6 +406,7 @@
     "pushNotifications": "Push notifikácie",
     "pushEnabled": "Notifikácie sú zapnuté na tomto zariadení.",
     "pushDisabled": "Notifikácie sú vypnuté na tomto zariadení.",
+    "pushDenied": "Notifikácie boli zablokované. Povoľte ich v nastaveniach prehliadača.",
     "enable": "Zapnúť",
     "disable": "Vypnúť",
     "prefNewPost": "Nové príspevky",

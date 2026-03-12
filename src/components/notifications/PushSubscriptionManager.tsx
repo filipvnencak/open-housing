@@ -3,21 +3,41 @@
 import { useState, useEffect } from "react";
 import { useTranslations } from "next-intl";
 
+function urlBase64ToUint8Array(base64String: string): Uint8Array<ArrayBuffer> {
+  const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
+  const rawData = atob(base64);
+  const buffer = new ArrayBuffer(rawData.length);
+  const view = new Uint8Array(buffer);
+  for (let i = 0; i < rawData.length; i++) {
+    view[i] = rawData.charCodeAt(i);
+  }
+  return view as Uint8Array<ArrayBuffer>;
+}
+
 export default function PushSubscriptionManager() {
   const t = useTranslations("Notifications");
   const [supported, setSupported] = useState(false);
   const [subscribed, setSubscribed] = useState(false);
+  const [denied, setDenied] = useState(false);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const isSupported =
       typeof window !== "undefined" &&
       "serviceWorker" in navigator &&
-      "PushManager" in window;
+      "PushManager" in window &&
+      "Notification" in window;
 
     setSupported(isSupported);
 
     if (!isSupported) {
+      setLoading(false);
+      return;
+    }
+
+    if (Notification.permission === "denied") {
+      setDenied(true);
       setLoading(false);
       return;
     }
@@ -34,10 +54,22 @@ export default function PushSubscriptionManager() {
   async function handleSubscribe() {
     setLoading(true);
     try {
+      const permission = await Notification.requestPermission();
+      if (permission !== "granted") {
+        setDenied(permission === "denied");
+        return;
+      }
+
+      const vapidKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
+      if (!vapidKey) {
+        console.error("[push] VAPID public key not configured");
+        return;
+      }
+
       const reg = await navigator.serviceWorker.ready;
       const sub = await reg.pushManager.subscribe({
         userVisibleOnly: true,
-        applicationServerKey: process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY,
+        applicationServerKey: urlBase64ToUint8Array(vapidKey),
       });
 
       const subJson = sub.toJSON();
@@ -93,12 +125,16 @@ export default function PushSubscriptionManager() {
           {t("pushNotifications")}
         </p>
         <p className="text-sm text-gray-500">
-          {subscribed ? t("pushEnabled") : t("pushDisabled")}
+          {denied
+            ? t("pushDenied")
+            : subscribed
+              ? t("pushEnabled")
+              : t("pushDisabled")}
         </p>
       </div>
       <button
         onClick={subscribed ? handleUnsubscribe : handleSubscribe}
-        disabled={loading}
+        disabled={loading || denied}
         className={`px-5 py-3 text-base font-medium rounded-lg transition-colors ${
           subscribed
             ? "bg-gray-200 hover:bg-gray-300 text-gray-700"

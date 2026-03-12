@@ -406,6 +406,7 @@
     "pushNotifications": "Push notifications",
     "pushEnabled": "Notifications are enabled on this device.",
     "pushDisabled": "Notifications are disabled on this device.",
+    "pushDenied": "Notifications were blocked. Enable them in your browser settings.",
     "enable": "Enable",
     "disable": "Disable",
     "prefNewPost": "New posts",
